@@ -1,0 +1,28 @@
+{
+  "name": "@wiktapi/api",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "nitro build",
+    "dev": "nitro dev",
+    "preview": "npx srvx --prod .output/",
+    "test": "vp test run",
+    "download": "node scripts/download_kaikki.ts",
+    "import": "node scripts/import_data.ts",
+    "import:staging": "node scripts/import_data.ts --output data/wiktionary.db.new --fresh --skip-indexes",
+    "index": "node scripts/build_indexes.ts",
+    "index:staging": "node scripts/build_indexes.ts --output data/wiktionary.db.new",
+    "swap": "mv data/wiktionary.db.new data/wiktionary.db"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "effect": "^3.19.18"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "nitro": "latest",
+    "rolldown": "latest",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
+  }
+}

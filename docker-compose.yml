@@ -1,0 +1,24 @@
+services:
+  api:
+    build:
+      context: .
+      target: runtime
+    image: ${API_IMAGE:-wiktapi-api}
+    volumes:
+      - data:/data
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      target: worker
+    image: ${WORKER_IMAGE:-wiktapi-worker}
+    volumes:
+      - data:/app/packages/api/data
+    profiles:
+      - tools
+
+volumes:
+  data:

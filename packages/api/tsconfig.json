@@ -1,0 +1,12 @@
+{
+  "extends": ["nitro/tsconfig"],
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "rewriteRelativeImportExtensions": true,
+    "outDir": "./.tsbuild",
+    "paths": {
+      "~/*": ["./*"]
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "@wiktapi/docs",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "2.0.0-alpha.16",
+    "vitepress-plugin-llms": "latest"
+  }
+}
