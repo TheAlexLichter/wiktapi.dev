@@ -1,0 +1,75 @@
+name: Monthly Reimport
+
+on:
+  schedule:
+    # 2nd of every month at 03:00 UTC
+    - cron: "0 3 2 * *"
+  workflow_dispatch:
+    inputs:
+      editions:
+        description: "Editions to import (--all or --editions en,fr,de)"
+        default: "--all"
+        required: false
+      server_type:
+        description: "Hetzner server type"
+        default: "cx43"
+        required: false
+
+# Only one reimport at a time
+concurrency:
+  group: reimport
+  cancel-in-progress: false
+
+jobs:
+  # Build and push the worker image to GHCR
+  build-worker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: worker
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/wiktapi-worker:latest
+
+  # Run the reimport on a temporary Hetzner server
+  reimport:
+    needs: build-worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 360 # 6 hours max
+    env:
+      HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install hcloud CLI
+        run: |
+          curl -sL https://github.com/hetznercloud/cli/releases/latest/download/hcloud-linux-amd64.tar.gz | tar xz
+          sudo mv hcloud /usr/local/bin/
+
+      - name: Run reimport
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+          PROD_PORT: ${{ secrets.PROD_PORT }}
+          PROD_USER: ${{ secrets.PROD_USER }}
+          PROD_SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+          HETZNER_SSH_KEY: ${{ secrets.HETZNER_SSH_KEY }}
+          SSH_KEY_NAME: ${{ secrets.HETZNER_SSH_KEY_NAME }}
+          WORKER_IMAGE: ghcr.io/${{ github.repository_owner }}/wiktapi-worker:latest
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EDITIONS: ${{ inputs.editions || '--all' }}
+          SERVER_TYPE: ${{ inputs.server_type || 'cx43' }}
+        run: |
+          chmod +x scripts/reimport-ci.sh
+          ./scripts/reimport-ci.sh

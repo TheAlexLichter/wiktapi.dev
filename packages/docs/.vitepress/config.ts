@@ -47,6 +47,6 @@ export default defineConfig({
         items: [{ text: "About", link: "/about" }],
       },
     ],
-    socialLinks: [{ icon: "github", link: "https://github.com/your-org/wiktionary-api" }],
+    socialLinks: [{ icon: "github", link: "https://github.com/TheAlexLichter/wiktionary-api" }],
   },
 });

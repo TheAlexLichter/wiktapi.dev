@@ -10,7 +10,7 @@ Run your own Wiktapi instance with a single SQLite file. No external services re
 ## 1. Clone and install
 
 ```bash
-git clone https://github.com/your-org/wiktionary-api
+git clone https://github.com/TheAlexLichter/wiktionary-api
 cd wiktionary-api
 pnpm install
 ```
