@@ -4,15 +4,20 @@
   "type": "module",
   "scripts": {
     "build": "nitro build",
+    "benchmark": "node scripts/benchmark_api.ts",
     "dev": "nitro dev",
     "preview": "npx srvx --prod .output/",
     "test": "vp test run",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "download": "node scripts/download_kaikki.ts",
     "import": "node scripts/import_data.ts",
-    "import:staging": "node scripts/import_data.ts --output data/wiktionary.db.new --fresh",
+    "refresh": "node scripts/refresh_database.ts",
+    "import:staging": "node scripts/import_data.ts --output data/wiktionary.db.new --fresh --require-all-editions",
     "index": "node scripts/build_indexes.ts",
-    "index:staging": "node scripts/build_indexes.ts --output data/wiktionary.db.new",
-    "swap": "mv data/wiktionary.db.new data/wiktionary.db"
+    "index:staging": "node scripts/build_indexes.ts --output data/wiktionary.db.new --require-all-editions",
+    "validate:staging": "node scripts/validate_database.ts --output data/wiktionary.db.new --require-all-editions",
+    "swap": "node scripts/swap_database.ts",
+    "rollback": "node scripts/rollback_database.ts"
   },
   "dependencies": {
     "better-sqlite3": "^12.6.2",

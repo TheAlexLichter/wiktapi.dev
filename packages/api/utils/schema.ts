@@ -26,7 +26,10 @@ export const ENTRIES_INDEXES_DDL = `
     ON entries (edition, lang_code, lower(word), word, lang, pos);
 `;
 
-export const OBSOLETE_INDEXES_DDL = `
+export const DROP_MANAGED_INDEXES_DDL = `
+  DROP INDEX IF EXISTS idx_edition_word;
+  DROP INDEX IF EXISTS idx_search_prefix;
+  DROP INDEX IF EXISTS idx_search_lang_prefix;
   DROP INDEX IF EXISTS idx_word_lang;
   DROP INDEX IF EXISTS idx_lang;
 `;
@@ -34,6 +37,11 @@ export const OBSOLETE_INDEXES_DDL = `
 export const METADATA_TABLES_DDL = `
   CREATE TABLE IF NOT EXISTS editions (
     edition TEXT PRIMARY KEY
+  );
+
+  CREATE TABLE IF NOT EXISTS edition_stats (
+    edition     TEXT    PRIMARY KEY,
+    entry_count INTEGER NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS language_stats (
@@ -44,9 +52,15 @@ export const METADATA_TABLES_DDL = `
 `;
 
 export const REBUILD_METADATA_SQL = `
+  DELETE FROM edition_stats;
+  INSERT INTO edition_stats (edition, entry_count)
+    SELECT edition, COUNT(*)
+    FROM entries
+    GROUP BY edition;
+
   DELETE FROM editions;
   INSERT INTO editions (edition)
-    SELECT DISTINCT edition FROM entries;
+    SELECT edition FROM edition_stats;
 
   DELETE FROM language_stats;
   INSERT INTO language_stats (lang_code, lang, entry_count)

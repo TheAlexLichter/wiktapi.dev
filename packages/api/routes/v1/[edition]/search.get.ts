@@ -8,7 +8,7 @@ defineRouteMeta({
     tags: ["Search"],
     summary: "Prefix search",
     description:
-      "Returns up to 50 words that start with the given prefix, optionally filtered by language.",
+      "Returns up to 50 words that start with the given prefix, optionally filtered by language. Case-insensitive matching applies to ASCII letters only; non-ASCII characters are matched exactly.",
     parameters: [
       {
         in: "path",
@@ -22,7 +22,7 @@ defineRouteMeta({
         name: "q",
         required: true,
         schema: { type: "string" },
-        description: "Search prefix.",
+        description: "Search prefix (ASCII case-insensitive; non-ASCII case-sensitive).",
       },
       {
         in: "query",
