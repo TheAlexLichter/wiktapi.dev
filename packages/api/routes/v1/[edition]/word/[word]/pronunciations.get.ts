@@ -72,7 +72,7 @@ defineRouteMeta({
 
 export default defineHandler((event) => {
   const edition = getRouterParam(event, "edition")!;
-  const word = getRouterParam(event, "word")!;
+  const word = getRouterParam(event, "word", { decode: true })!;
   const { lang } = getQuery(event) as { lang?: string };
 
   const pronunciations = fetchWordEntries(edition, word, lang).map((r) => ({
