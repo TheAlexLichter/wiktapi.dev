@@ -11,7 +11,8 @@
 
 import { Effect, Console } from "effect";
 import Database from "better-sqlite3";
-import { ENTRIES_TABLE_DDL, ENTRIES_INDEXES_DDL, ENTRIES_INSERT_SQL } from "../utils/schema.ts";
+import { ENTRIES_TABLE_DDL, ENTRIES_INSERT_SQL, METADATA_TABLES_DDL } from "../utils/schema.ts";
+import { finalizeDatabase } from "../utils/finalize-database.ts";
 import { createReadStream } from "node:fs";
 import { readdir, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -49,9 +50,19 @@ const makeDatabase = (dbPath: string, fresh: boolean) =>
         db.pragma("temp_store = MEMORY");
         db.pragma("mmap_size = 268435456"); // 256 MB
 
-        if (fresh) db.exec("DROP TABLE IF EXISTS entries");
+        if (fresh) {
+          db.exec(`
+            DROP TABLE IF EXISTS entries;
+            DROP TABLE IF EXISTS editions;
+            DROP TABLE IF EXISTS language_stats;
+          `);
+        }
 
         db.exec(ENTRIES_TABLE_DDL);
+        db.exec(METADATA_TABLES_DDL);
+        // Mark the database unavailable until finalization has rebuilt every
+        // request-time index and metadata table successfully.
+        db.pragma("user_version = 0");
 
         return db;
       },
@@ -223,10 +234,12 @@ const main: Effect.Effect<void, Error> = Effect.scoped(
     );
 
     if (skipIndexes) {
-      yield* Console.log("\nSkipping indexes (run `vp run @wiktapi/api#index` separately).");
+      yield* Console.log(
+        "\nSkipping indexes and metadata (run `vp run @wiktapi/api#index` separately).",
+      );
     } else {
-      yield* Console.log("\nBuilding indexes …");
-      db.exec(ENTRIES_INDEXES_DDL);
+      yield* Console.log("\nFinalizing indexes and metadata …");
+      finalizeDatabase(db);
     }
 
     const { count } = db.prepare("SELECT COUNT(*) AS count FROM entries").get() as {

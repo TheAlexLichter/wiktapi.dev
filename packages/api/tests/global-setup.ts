@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import { mkdirSync, rmSync } from "node:fs";
-import { ENTRIES_TABLE_DDL, ENTRIES_INDEXES_DDL, ENTRIES_INSERT_SQL } from "../utils/schema.ts";
+import { ENTRIES_TABLE_DDL, ENTRIES_INSERT_SQL, METADATA_TABLES_DDL } from "../utils/schema.ts";
+import { finalizeDatabase } from "../utils/finalize-database.ts";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -72,6 +73,39 @@ const SAMPLE_ENTRIES = [
     translations: JSON.stringify([{ lang: "English", lang_code: "en", word: "cat" }]),
     forms: JSON.stringify([{ form: "chats", tags: ["plural"] }]),
   },
+  {
+    word: "Äpfel",
+    lang_code: "de",
+    lang: "German",
+    edition: "en",
+    pos: "noun",
+    senses: JSON.stringify([{ glosses: ["apples"], examples: [], tags: [] }]),
+    sounds: null,
+    translations: null,
+    forms: null,
+  },
+  {
+    word: "%literal",
+    lang_code: "en",
+    lang: "English",
+    edition: "en",
+    pos: "adjective",
+    senses: JSON.stringify([{ glosses: ["percent-prefixed"], examples: [], tags: [] }]),
+    sounds: null,
+    translations: null,
+    forms: null,
+  },
+  {
+    word: "_literal",
+    lang_code: "en",
+    lang: "English",
+    edition: "en",
+    pos: "adjective",
+    senses: JSON.stringify([{ glosses: ["underscore-prefixed"], examples: [], tags: [] }]),
+    sounds: null,
+    translations: null,
+    forms: null,
+  },
 ];
 
 export function setup() {
@@ -79,7 +113,7 @@ export function setup() {
 
   const db = new Database(TEST_DB_PATH);
   db.exec(ENTRIES_TABLE_DDL);
-  db.exec(ENTRIES_INDEXES_DDL);
+  db.exec(METADATA_TABLES_DDL);
 
   const insert = db.prepare(ENTRIES_INSERT_SQL);
   const insertMany = db.transaction((rows: typeof SAMPLE_ENTRIES) => {
@@ -87,6 +121,7 @@ export function setup() {
   });
 
   insertMany(SAMPLE_ENTRIES);
+  finalizeDatabase(db);
   db.close();
 }
 

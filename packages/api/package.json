@@ -9,7 +9,7 @@
     "test": "vp test run",
     "download": "node scripts/download_kaikki.ts",
     "import": "node scripts/import_data.ts",
-    "import:staging": "node scripts/import_data.ts --output data/wiktionary.db.new --fresh --skip-indexes",
+    "import:staging": "node scripts/import_data.ts --output data/wiktionary.db.new --fresh",
     "index": "node scripts/build_indexes.ts",
     "index:staging": "node scripts/build_indexes.ts --output data/wiktionary.db.new",
     "swap": "mv data/wiktionary.db.new data/wiktionary.db"

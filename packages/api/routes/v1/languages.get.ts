@@ -39,10 +39,9 @@ defineRouteMeta({
 export default defineHandler(() => {
   const rows = db
     .prepare(
-      `SELECT lang_code, lang, COUNT(*) AS entry_count
-       FROM entries
-       GROUP BY lang_code, lang
-       ORDER BY entry_count DESC`,
+      `SELECT lang_code, lang, entry_count
+       FROM language_stats
+       ORDER BY entry_count DESC, lang_code, lang`,
     )
     .all() as { lang_code: string; lang: string | null; entry_count: number }[];
 

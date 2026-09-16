@@ -8,7 +8,7 @@
 
 import { Effect, Console } from "effect";
 import Database from "better-sqlite3";
-import { ENTRIES_INDEXES_DDL } from "../utils/schema.ts";
+import { finalizeDatabase } from "../utils/finalize-database.ts";
 import { resolve } from "node:path";
 
 const DATA_DIR = resolve("./data");
@@ -32,13 +32,11 @@ const main: Effect.Effect<void, Error> = Effect.gen(function* () {
   db.pragma("temp_store = MEMORY");
   db.pragma("mmap_size = 268435456"); // 256 MB
 
-  yield* Console.log(`Building indexes on ${dbPath} …`);
-  db.exec(ENTRIES_INDEXES_DDL);
-
-  const { count } = db.prepare("SELECT COUNT(*) AS count FROM entries").get() as {
-    count: number;
-  };
-  yield* Console.log(`Done — ${count.toLocaleString()} total entries indexed`);
+  yield* Console.log(`Finalizing indexes and metadata on ${dbPath} …`);
+  const summary = finalizeDatabase(db);
+  yield* Console.log(
+    `Done — ${summary.entries.toLocaleString()} entries, ${summary.editions.toLocaleString()} editions, ${summary.languages.toLocaleString()} languages`,
+  );
 
   db.close();
 });

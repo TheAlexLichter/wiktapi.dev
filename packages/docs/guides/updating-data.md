@@ -10,13 +10,13 @@ Because the API server opens the SQLite file once at startup and holds the conne
 cd packages/api
 
 # Step 1 — download the latest dump
-pnpm download -- --force
+vp run download -- --force
 
-# Step 2 — import into a staging file (server keeps serving the old DB)
-pnpm import:staging
+# Step 2 — import and finalize a staging file (server keeps serving the old DB)
+vp run import:staging
 
 # Step 3 — atomic swap (single syscall on POSIX; existing connections keep the old inode)
-pnpm swap
+vp run swap
 
 # Step 4 — restart the server to open a fresh connection to the new file
 #           (Cloudflare's cache covers the ~1 s cold-start gap)
@@ -25,6 +25,11 @@ systemctl restart wiktionary-api   # or however you manage the process
 
 `import:staging` writes to `data/wiktionary.db.new`. `swap` runs `mv data/wiktionary.db.new data/wiktionary.db`, which is an atomic rename on the same filesystem. The live server continues reading its open file descriptor pointing at the old inode; after you restart it opens the new file.
 
+The finalization step builds covering prefix-search indexes and precomputes the
+editions and language statistics used by the metadata endpoints. Existing
+databases can be upgraded offline with the `index` command; do not build the
+indexes against the database being served by the single-process API.
+
 ## Simple re-import (downtime)
 
 If you don't mind a brief restart window, or are updating a development instance:
@@ -32,28 +37,26 @@ If you don't mind a brief restart window, or are updating a development instance
 ```bash
 cd packages/api
 
-pnpm download -- --force
-pnpm import -- --fresh
+vp run download -- --force
+vp run import -- --fresh
 ```
 
 The `--fresh` flag drops the existing `entries` table before importing, so no stale rows from previous imports are left behind.
 
 ## Partial updates
 
-To update only one edition without touching others:
+Using `--edition` together with `--fresh` creates a database containing only
+that edition; `--fresh` always drops the complete entries table. In-place
+partial replacement is not currently supported. To build a single-edition
+database:
 
 ```bash
-pnpm download -- --editions en --force
-pnpm import -- --edition en --fresh
+vp run download -- --editions en --force
+vp run import -- --edition en --fresh
 ```
 
-Other editions remain in the database and queryable while the import runs. For zero-downtime partial updates, pass `--edition` and `--output` together:
-
-```bash
-# import only the English edition into the staging file
-pnpm import -- --edition en --output data/wiktionary.db.new --fresh
-pnpm swap
-```
+For zero-downtime updates of a multi-edition database, use the complete staging
+workflow above.
 
 ## Automating updates
 
@@ -64,9 +67,9 @@ The database is too large to store as a GitHub Actions artifact (the English edi
 ```bash
 # /etc/cron.d/wiktapi — runs at 03:00 on the first of each month
 0 3 1 * * deploy  cd /srv/wiktionary-api/packages/api \
-  && pnpm download -- --force \
-  && pnpm import:staging \
-  && pnpm swap \
+  && vp run download -- --force \
+  && vp run import:staging \
+  && vp run swap \
   && systemctl restart wiktionary-api
 ```
 
@@ -91,9 +94,9 @@ jobs:
           key: ${{ secrets.DEPLOY_KEY }}
           script: |
             cd /srv/wiktionary-api/packages/api
-            pnpm download -- --force
-            pnpm import:staging
-            pnpm swap
+            vp run download -- --force
+            vp run import:staging
+            vp run swap
             systemctl restart wiktionary-api
 ```
 

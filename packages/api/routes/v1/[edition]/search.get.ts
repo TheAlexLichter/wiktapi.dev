@@ -1,6 +1,7 @@
 import { defineRouteMeta } from "nitro";
 import { defineHandler, getRouterParam, getQuery, createError } from "nitro/h3";
 import { db } from "../../../utils/db";
+import { getPrefixUpperBound, normalizeSearchWord } from "../../../utils/search";
 
 defineRouteMeta({
   openAPI: {
@@ -69,31 +70,29 @@ export default defineHandler((event) => {
     throw createError({ statusCode: 400, message: "Missing required query param: q" });
   }
 
-  const prefix = q.toLowerCase().replace(/[%_]/g, "\\$&") + "%";
+  const prefix = normalizeSearchWord(q);
+  const upperBound = getPrefixUpperBound(prefix);
 
   type Row = { word: string; lang_code: string; lang: string | null; pos: string | null };
 
-  const rows = (
-    lang
-      ? db
-          .prepare(
-            `SELECT DISTINCT word, lang_code, lang, pos
-             FROM entries
-             WHERE edition = ? AND lower(word) LIKE ? ESCAPE '\\' AND lang_code = ?
-             ORDER BY word
-             LIMIT 50`,
-          )
-          .all(edition, prefix, lang)
-      : db
-          .prepare(
-            `SELECT DISTINCT word, lang_code, lang, pos
-             FROM entries
-             WHERE edition = ? AND lower(word) LIKE ? ESCAPE '\\'
-             ORDER BY word
-             LIMIT 50`,
-          )
-          .all(edition, prefix)
-  ) as Row[];
+  const upperBoundClause = upperBound === null ? "" : "AND lower(word) < ?";
+  const sql = `SELECT DISTINCT lower(word) AS search_word, word, lang_code, lang, pos
+               FROM entries
+               WHERE edition = ?
+                 AND lower(word) >= ?
+                 ${upperBoundClause}
+                 ${lang ? "AND lang_code = ?" : ""}
+               ORDER BY lower(word), word, lang_code, lang, pos
+               LIMIT 50`;
+  const parameters = [
+    edition,
+    prefix,
+    ...(upperBound === null ? [] : [upperBound]),
+    ...(lang ? [lang] : []),
+  ];
+  const rows = db.prepare(sql).all(...parameters) as (Row & { search_word: string })[];
 
-  return { results: rows };
+  return {
+    results: rows.map(({ search_word: _, ...row }) => row),
+  };
 });
