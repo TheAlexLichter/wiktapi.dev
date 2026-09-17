@@ -5,7 +5,7 @@ const dbPath = process.env.DATA_PATH ?? resolve("./data/wiktionary.db");
 
 console.log(`Opening database at ${dbPath}...`);
 
-export const db = new Database(dbPath, { readonly: true });
+export const db: Database.Database = new Database(dbPath, { readonly: true });
 
 // Necessary pragma settings for performance; these are safe for read-only access on a server with at least 2GB of RAM
 db.pragma("cache_size = -32000"); // 32MB internal cache
