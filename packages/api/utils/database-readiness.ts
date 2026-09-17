@@ -1,9 +1,11 @@
 import type Database from "better-sqlite3";
+import { assertSearchNormalizerCompatible } from "./database-metadata.ts";
 import { describeEditionDifference } from "./editions.ts";
 import { DATABASE_SCHEMA_VERSION } from "./schema.ts";
 
 const REQUIRED_OBJECTS = [
   ["table", "entries"],
+  ["table", "database_metadata"],
   ["table", "editions"],
   ["table", "edition_stats"],
   ["table", "language_stats"],
@@ -16,6 +18,10 @@ const EXPECTED_COLUMNS: Record<
   string,
   readonly { name: string; type: string; notnull: number; pk: number }[]
 > = {
+  database_metadata: [
+    { name: "key", type: "TEXT", notnull: 0, pk: 1 },
+    { name: "value", type: "TEXT", notnull: 1, pk: 0 },
+  ],
   entries: [
     { name: "id", type: "INTEGER", notnull: 0, pk: 1 },
     { name: "word", type: "TEXT", notnull: 1, pk: 0 },
@@ -118,6 +124,8 @@ export function assertDatabaseReady(
       throw new Error(`Database index ${name} has an unexpected definition`);
     }
   }
+
+  assertSearchNormalizerCompatible(db);
 
   if (options.expectedEditions) {
     const editions = db

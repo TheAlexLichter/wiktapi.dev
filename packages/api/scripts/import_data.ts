@@ -14,6 +14,11 @@ import { Effect, Console } from "effect";
 import Database from "better-sqlite3";
 import { ENTRIES_TABLE_DDL, ENTRIES_INSERT_SQL, METADATA_TABLES_DDL } from "../utils/schema.ts";
 import { finalizeDatabase } from "../utils/finalize-database.ts";
+import {
+  assertSearchNormalizerCompatible,
+  initializeSearchNormalizerMetadata,
+  readSearchNormalizerId,
+} from "../utils/database-metadata.ts";
 import { normalizeSearchWord } from "../utils/search.ts";
 import { ALL_EDITIONS, describeEditionDifference } from "../utils/editions.ts";
 import {
@@ -63,6 +68,7 @@ const makeDatabase = (dbPath: string, fresh: boolean) =>
         if (fresh) {
           db.exec(`
             DROP TABLE IF EXISTS entries;
+            DROP TABLE IF EXISTS database_metadata;
             DROP TABLE IF EXISTS editions;
             DROP TABLE IF EXISTS edition_stats;
             DROP TABLE IF EXISTS language_stats;
@@ -71,6 +77,11 @@ const makeDatabase = (dbPath: string, fresh: boolean) =>
 
         db.exec(ENTRIES_TABLE_DDL);
         db.exec(METADATA_TABLES_DDL);
+        if (readSearchNormalizerId(db) === null) {
+          const hasEntries = Boolean(db.prepare("SELECT 1 FROM entries LIMIT 1").get());
+          if (!hasEntries) initializeSearchNormalizerMetadata(db);
+        }
+        assertSearchNormalizerCompatible(db);
         // Mark the database unavailable until finalization has rebuilt every
         // request-time index and metadata table successfully.
         db.pragma("user_version = 0");

@@ -15,6 +15,15 @@ describe("search utilities", () => {
     expect(normalizeSearchWord("A\u030A")).toBe(normalizeSearchWord("Å"));
   });
 
+  it("normalizes canonically equivalent reordered marks before case folding", () => {
+    const ypogegrammeniBeforeGrave = "\u0345\u0300";
+    const canonicallyReordered = ypogegrammeniBeforeGrave.normalize("NFD");
+
+    expect(normalizeSearchWord(ypogegrammeniBeforeGrave)).toBe(
+      normalizeSearchWord(canonicallyReordered),
+    );
+  });
+
   it.each([
     ["ch", "ci"],
     ["ä", "å"],

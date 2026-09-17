@@ -22,32 +22,44 @@ All entries are stored in a single `entries` table:
 
 ```sql
 CREATE TABLE entries (
-    id        INTEGER PRIMARY KEY,
-    word      TEXT    NOT NULL,
-    lang_code TEXT    NOT NULL,   -- BCP47 code of the word's language (fr, de, …)
-    lang      TEXT,               -- full language name ("French", "German", …)
-    edition   TEXT    NOT NULL,   -- source Wiktionary edition (en, fr, …)
-    pos       TEXT,               -- part of speech (noun, verb, adj, …)
-    entry     TEXT    NOT NULL    -- full wiktextract object as JSON string
+    id              INTEGER PRIMARY KEY,
+    word            TEXT NOT NULL,
+    normalized_word TEXT NOT NULL,
+    lang_code       TEXT NOT NULL,
+    lang            TEXT,
+    edition         TEXT NOT NULL,
+    pos             TEXT,
+    senses          TEXT NOT NULL,
+    sounds          TEXT,
+    translations    TEXT,
+    forms           TEXT
 );
 ```
 
-The `entry` column stores the complete wiktextract JSON object, giving all endpoints access to every field (senses, sounds, translations, forms, etymology, synonyms) without a normalized schema.
+`normalized_word` stores an NFD-normalized, Unicode-case-folded, then
+NFC-normalized search key. Prefix searches use bounded range scans over two
+covering indexes: one for general searches and one beginning with `lang_code`
+for language-filtered searches. The database records the normalizer version in
+`database_metadata`; incompatible databases are rejected instead of silently
+serving stale search keys.
+
+The structured payload fields are retained as JSON text in `senses`, `sounds`,
+`translations`, and `forms`. Small `editions`, `edition_stats`, and
+`language_stats` tables are rebuilt during finalization so metadata endpoints do
+not scan the complete entries table at request time.
 
 ## Fields used from wiktextract
 
-| Field                               | Description                  |
-| ----------------------------------- | ---------------------------- |
-| `word`                              | The headword                 |
-| `lang`, `lang_code`                 | Language name and BCP47 code |
-| `pos`                               | Part of speech               |
-| `senses[].glosses`                  | Definitions                  |
-| `senses[].examples`                 | Usage examples               |
-| `sounds[].ipa`, `sounds[].audio`    | Pronunciation                |
-| `translations[]`                    | Translation table            |
-| `forms[]`                           | Inflected forms              |
-| `etymology_text`                    | Etymology                    |
-| `synonyms`, `antonyms`, `hypernyms` | Related words                |
+| Field                            | Description                  |
+| -------------------------------- | ---------------------------- |
+| `word`                           | The headword                 |
+| `lang`, `lang_code`              | Language name and BCP47 code |
+| `pos`                            | Part of speech               |
+| `senses[].glosses`               | Definitions                  |
+| `senses[].examples`              | Usage examples               |
+| `sounds[].ipa`, `sounds[].audio` | Pronunciation                |
+| `translations[]`                 | Translation table            |
+| `forms[]`                        | Inflected forms              |
 
 ## Caching
 

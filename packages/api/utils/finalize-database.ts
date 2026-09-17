@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import { assertDatabaseReady } from "./database-readiness.ts";
+import { assertSearchNormalizerCompatible } from "./database-metadata.ts";
 import { describeEditionDifference } from "./editions.ts";
 import {
   DATABASE_SCHEMA_VERSION,
@@ -31,6 +32,7 @@ export function finalizeDatabase(
       "Database entries do not contain Unicode search keys; rebuild it from source data instead of indexing it in place",
     );
   }
+  assertSearchNormalizerCompatible(db);
 
   // A failed or interrupted finalization must never retain a ready marker.
   db.pragma("user_version = 0");

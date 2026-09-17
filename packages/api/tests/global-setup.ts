@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import { mkdirSync, rmSync } from "node:fs";
 import { ENTRIES_TABLE_DDL, ENTRIES_INSERT_SQL, METADATA_TABLES_DDL } from "../utils/schema.ts";
 import { finalizeDatabase } from "../utils/finalize-database.ts";
+import { initializeSearchNormalizerMetadata } from "../utils/database-metadata.ts";
 import { normalizeSearchWord } from "../utils/search.ts";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -137,6 +138,7 @@ export function setup() {
   const db = new Database(TEST_DB_PATH);
   db.exec(ENTRIES_TABLE_DDL);
   db.exec(METADATA_TABLES_DDL);
+  initializeSearchNormalizerMetadata(db);
 
   const insert = db.prepare(ENTRIES_INSERT_SQL);
   const insertMany = db.transaction((rows: typeof SAMPLE_ENTRIES) => {

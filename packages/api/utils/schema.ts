@@ -41,6 +41,11 @@ export const DROP_MANAGED_INDEXES_DDL = `
 `;
 
 export const METADATA_TABLES_DDL = `
+  CREATE TABLE IF NOT EXISTS database_metadata (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS editions (
     edition TEXT PRIMARY KEY
   );
@@ -56,6 +61,8 @@ export const METADATA_TABLES_DDL = `
     entry_count INTEGER NOT NULL
   );
 `;
+
+export const SEARCH_NORMALIZER_METADATA_KEY = "search_normalizer";
 
 export const REBUILD_METADATA_SQL = `
   DELETE FROM edition_stats;
@@ -75,4 +82,4 @@ export const REBUILD_METADATA_SQL = `
     GROUP BY lang_code, lang;
 `;
 
-export const DATABASE_SCHEMA_VERSION = 2;
+export const DATABASE_SCHEMA_VERSION = 3;

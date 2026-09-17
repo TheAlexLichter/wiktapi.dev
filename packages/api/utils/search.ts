@@ -1,8 +1,10 @@
 import { caseFold } from "unicode-case-folding";
 
+export const SEARCH_NORMALIZER_ID = "unicode-case-folding@1.1.1:nfd-casefold-nfc:v1";
+
 /** Build the locale-independent Unicode key stored and queried by prefix search. */
 export function normalizeSearchWord(word: string): string {
-  return caseFold(word).normalize("NFC");
+  return caseFold(word.normalize("NFD")).normalize("NFC");
 }
 
 /**

@@ -7,7 +7,14 @@ import { assertDatabaseReady } from "../utils/database-readiness.ts";
 import { db } from "../utils/db.ts";
 import { finalizeDatabase } from "../utils/finalize-database.ts";
 import { validateDatabaseDeep } from "../utils/database-validation.ts";
-import { ENTRIES_INSERT_SQL, ENTRIES_TABLE_DDL, METADATA_TABLES_DDL } from "../utils/schema.ts";
+import { initializeSearchNormalizerMetadata } from "../utils/database-metadata.ts";
+import {
+  DATABASE_SCHEMA_VERSION,
+  ENTRIES_INSERT_SQL,
+  ENTRIES_TABLE_DDL,
+  METADATA_TABLES_DDL,
+} from "../utils/schema.ts";
+import { SEARCH_NORMALIZER_ID } from "../utils/search.ts";
 
 describe("database readiness", () => {
   it("accepts a finalized database and an exact expected-edition manifest", () => {
@@ -34,10 +41,21 @@ describe("database readiness", () => {
     }
   });
 
+  it("refuses to finalize unversioned materialized search keys", () => {
+    const unversioned = new Database(":memory:");
+    try {
+      unversioned.exec(ENTRIES_TABLE_DDL);
+      unversioned.exec(METADATA_TABLES_DDL);
+      expect(() => finalizeDatabase(unversioned)).toThrow(/search normalizer null/);
+    } finally {
+      unversioned.close();
+    }
+  });
+
   it("rejects a ready version marker without the required request-time objects", () => {
     const incomplete = new Database(":memory:");
     try {
-      incomplete.pragma("user_version = 2");
+      incomplete.pragma(`user_version = ${DATABASE_SCHEMA_VERSION}`);
       expect(() => assertDatabaseReady(incomplete)).toThrow(/missing/);
     } finally {
       incomplete.close();
@@ -55,6 +73,7 @@ describe("database readiness", () => {
       candidate.pragma("journal_mode = WAL");
       candidate.exec(ENTRIES_TABLE_DDL);
       candidate.exec(METADATA_TABLES_DDL);
+      initializeSearchNormalizerMetadata(candidate);
       candidate.prepare(ENTRIES_INSERT_SQL).run({
         word: "test",
         normalized_word: "test",
@@ -81,6 +100,10 @@ describe("database readiness", () => {
           minimumEditionEntries: 1,
         }).entries,
       ).toBe(1);
+
+      candidate.exec("UPDATE database_metadata SET value = 'obsolete-normalizer'");
+      expect(() => assertDatabaseReady(candidate)).toThrow(/obsolete-normalizer/);
+      candidate.prepare("UPDATE database_metadata SET value = ?").run(SEARCH_NORMALIZER_ID);
 
       candidate.exec("UPDATE edition_stats SET entry_count = 2");
       expect(() => validateDatabaseDeep(candidate)).toThrow(/metadata does not match/);

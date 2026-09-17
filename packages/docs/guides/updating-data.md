@@ -40,7 +40,7 @@ server continues reading its open inode; after restart it opens the new file.
 The prior generation remains available for rollback.
 
 The ordering is a compatibility boundary: the old API can read both the old
-schema and the additive schema-v2 database, but the new API deliberately
+schema and the additive schema-v3 database, but the new API deliberately
 refuses an old or unfinished database. Therefore install the finalized database
 first and activate the new API code second. The checkout containing the new
 import, validation, and swap scripts must already be present for step 2;
@@ -49,10 +49,12 @@ Step 3 is the restart that activates the new checkout. Do not restart the API
 while `refresh` is running.
 
 The finalization step builds covering prefix-search indexes and precomputes the
-editions and language statistics used by the metadata endpoints. Schema v2 also
+editions and language statistics used by the metadata endpoints. Schema v3 also
 stores a Unicode case-folded search key for every entry, so an old database must
 be rebuilt from the source dumps with `refresh`. The `index` command refuses to
 upgrade an old database in place because it cannot populate those keys safely.
+Each database records the exact search-normalizer implementation used to build
+the keys, and startup and swap validation reject an incompatible generation.
 Do not build indexes against the database being served by the single-process
 API.
 
@@ -108,7 +110,7 @@ systemctl restart wiktionary-api
 ```
 
 Rollback retains the rejected live generation as `wiktionary.db.failed`. On the
-first schema-v2 deployment, `.previous` may still be schema v0; in that case,
+first schema-v3 deployment, `.previous` may still be schema v0; in that case,
 roll back the application checkout as well before restarting because the new
 API deliberately rejects v0.
 
