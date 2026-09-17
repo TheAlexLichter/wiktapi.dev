@@ -69,7 +69,7 @@ try {
   if (liveExists) {
     const liveDatabase = new Database(livePath, { readonly: true, fileMustExist: true });
     try {
-      currentCounts = readEditionCounts(liveDatabase, { useFinalizedMetadata: true });
+      currentCounts = readEditionCounts(liveDatabase);
     } finally {
       liveDatabase.close();
     }
