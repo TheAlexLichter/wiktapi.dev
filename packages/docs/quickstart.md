@@ -43,9 +43,9 @@ Prefix search returns up to 50 matches:
 curl "https://api.wiktapi.dev/v1/en/search?q=katz&lang=de"
 ```
 
-Prefix matching is case-insensitive for ASCII letters (`A`–`Z`) only, matching
-SQLite's built-in `lower()` behavior. Non-ASCII characters are matched exactly:
-for example, `Ä` and `ä` are different prefixes.
+Prefix matching uses locale-independent Unicode case folding. This makes casing
+equivalent across supported scripts and handles full mappings such as
+`Straße`/`STRASSE` and Greek sigma variants.
 
 ## Explore all endpoints
 

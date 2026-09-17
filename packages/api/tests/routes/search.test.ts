@@ -4,22 +4,22 @@ import searchHandler from "../../routes/v1/[edition]/search.get";
 import { db } from "../../utils/db.ts";
 
 const SEARCH_PLAN_SQL = `EXPLAIN QUERY PLAN
-  SELECT DISTINCT lower(word) AS search_word, word, lang_code, lang, pos
+  SELECT DISTINCT normalized_word, word, lang_code, lang, pos
   FROM entries
   WHERE edition = ?
-    AND lower(word) >= ?
-    AND lower(word) < ?
-  ORDER BY lower(word), word, lang_code, lang, pos
+    AND normalized_word >= ?
+    AND normalized_word < ?
+  ORDER BY normalized_word, word, lang_code, lang, pos
   LIMIT 50`;
 
 const SEARCH_BY_LANGUAGE_PLAN_SQL = `EXPLAIN QUERY PLAN
-  SELECT DISTINCT lower(word) AS search_word, word, lang_code, lang, pos
+  SELECT DISTINCT normalized_word, word, lang_code, lang, pos
   FROM entries
   WHERE edition = ?
-    AND lower(word) >= ?
-    AND lower(word) < ?
+    AND normalized_word >= ?
+    AND normalized_word < ?
     AND lang_code = ?
-  ORDER BY lower(word), word, lang_code, lang, pos
+  ORDER BY normalized_word, word, lang_code, lang, pos
   LIMIT 50`;
 
 describe("GET /v1/{edition}/search", () => {
@@ -58,11 +58,19 @@ describe("GET /v1/{edition}/search", () => {
     expect(words).toContain("chat");
   });
 
-  it("preserves non-ASCII characters while folding ASCII case", () => {
-    const event = createTestEvent({ edition: "en" }, { q: "ÄP" });
+  it("folds non-ASCII case", () => {
+    const event = createTestEvent({ edition: "en" }, { q: "äP" });
     const result = searchHandler(event);
 
     expect(result.results.map((r: { word: string }) => r.word)).toContain("Äpfel");
+  });
+
+  it("uses full Unicode folding for expanding and contextual mappings", () => {
+    const sharpS = searchHandler(createTestEvent({ edition: "en" }, { q: "STRASS" }));
+    const sigma = searchHandler(createTestEvent({ edition: "en" }, { q: "ος" }));
+
+    expect(sharpS.results.map((r: { word: string }) => r.word)).toContain("Straße");
+    expect(sigma.results.map((r: { word: string }) => r.word)).toContain("ΟΣΑ");
   });
 
   it.each(["%", "_"])("treats %s as a literal prefix", (prefix) => {

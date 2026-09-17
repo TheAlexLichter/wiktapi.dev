@@ -2,8 +2,17 @@ import { describe, expect, it } from "vite-plus/test";
 import { getPrefixUpperBound, normalizeSearchWord } from "../utils/search.ts";
 
 describe("search utilities", () => {
-  it("matches SQLite's ASCII-only lower function", () => {
-    expect(normalizeSearchWord("ÄPFEL")).toBe("Äpfel");
+  it.each([
+    ["ÄPFEL", "äpfel"],
+    ["Straße", "strasse"],
+    ["ΟΣ", "οσ"],
+    ["ος", "οσ"],
+  ])("case-folds %s to %s", (input, expected) => {
+    expect(normalizeSearchWord(input)).toBe(expected);
+  });
+
+  it("normalizes canonically equivalent keys", () => {
+    expect(normalizeSearchWord("A\u030A")).toBe(normalizeSearchWord("Å"));
   });
 
   it.each([

@@ -21,7 +21,8 @@
   },
   "dependencies": {
     "better-sqlite3": "^12.6.2",
-    "effect": "^3.19.18"
+    "effect": "^3.19.18",
+    "unicode-case-folding": "catalog:"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

@@ -25,6 +25,13 @@ export function finalizeDatabase(
   db: Database.Database,
   options: FinalizeDatabaseOptions = {},
 ): DatabaseSummary {
+  const entryColumns = db.prepare("PRAGMA table_info(entries)").all() as { name: string }[];
+  if (!entryColumns.some(({ name }) => name === "normalized_word")) {
+    throw new Error(
+      "Database entries do not contain Unicode search keys; rebuild it from source data instead of indexing it in place",
+    );
+  }
+
   // A failed or interrupted finalization must never retain a ready marker.
   db.pragma("user_version = 0");
 

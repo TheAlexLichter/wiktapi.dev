@@ -1,6 +1,8 @@
-/** Match SQLite's built-in lower(), which folds ASCII characters only. */
+import { caseFold } from "unicode-case-folding";
+
+/** Build the locale-independent Unicode key stored and queried by prefix search. */
 export function normalizeSearchWord(word: string): string {
-  return word.replace(/[A-Z]/g, (character) => character.toLowerCase());
+  return caseFold(word).normalize("NFC");
 }
 
 /**

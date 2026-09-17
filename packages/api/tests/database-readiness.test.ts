@@ -24,6 +24,16 @@ describe("database readiness", () => {
     }
   });
 
+  it("refuses to finalize a database without materialized Unicode search keys", () => {
+    const legacy = new Database(":memory:");
+    try {
+      legacy.exec("CREATE TABLE entries (id INTEGER PRIMARY KEY, word TEXT NOT NULL)");
+      expect(() => finalizeDatabase(legacy)).toThrow(/rebuild it from source data/);
+    } finally {
+      legacy.close();
+    }
+  });
+
   it("rejects a ready version marker without the required request-time objects", () => {
     const incomplete = new Database(":memory:");
     try {
@@ -47,6 +57,7 @@ describe("database readiness", () => {
       candidate.exec(METADATA_TABLES_DDL);
       candidate.prepare(ENTRIES_INSERT_SQL).run({
         word: "test",
+        normalized_word: "test",
         lang_code: "en",
         lang: "English",
         edition: "en",

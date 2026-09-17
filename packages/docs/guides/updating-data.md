@@ -49,9 +49,12 @@ Step 3 is the restart that activates the new checkout. Do not restart the API
 while `refresh` is running.
 
 The finalization step builds covering prefix-search indexes and precomputes the
-editions and language statistics used by the metadata endpoints. Existing
-databases can be upgraded offline with the `index` command; do not build the
-indexes against the database being served by the single-process API.
+editions and language statistics used by the metadata endpoints. Schema v2 also
+stores a Unicode case-folded search key for every entry, so an old database must
+be rebuilt from the source dumps with `refresh`. The `index` command refuses to
+upgrade an old database in place because it cannot populate those keys safely.
+Do not build indexes against the database being served by the single-process
+API.
 
 ### Disk-space guard
 
@@ -66,11 +69,15 @@ creates a new `.previous` generation. If a check fails, expand the filesystem
 before continuing. The downloader additionally rechecks the 5 GiB
 reserve while decompressing and removes its temporary file on failure.
 
+The materialized Unicode search key and its covering indexes increase the final
+database size. Measure the completed staging database on the production corpus;
+the preflight headroom is a safety bound, not a size prediction.
+
 Finalization checkpoints and leaves WAL mode before creating the large indexes.
-When upgrading an existing database, it drops obsolete indexes first so their
-pages can be reused. It intentionally does **not** run `VACUUM`: a vacuum needs
-substantial temporary disk space and is unsafe to introduce automatically on a
-large database. Dropped pages may remain in the file even though SQLite can
+When finalizing a rebuilt database, it drops obsolete managed indexes first so
+their pages can be reused. It intentionally does **not** run `VACUUM`: a vacuum
+needs substantial temporary disk space and is unsafe to introduce automatically
+on a large database. Dropped pages may remain in the file even though SQLite can
 reuse them.
 
 `--skip-disk-check` exists for an operator who has already measured peak usage

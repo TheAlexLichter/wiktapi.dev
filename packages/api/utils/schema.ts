@@ -1,12 +1,18 @@
 export const ENTRIES_INSERT_SQL = `
-  INSERT INTO entries (word, lang_code, lang, edition, pos, senses, sounds, translations, forms)
-  VALUES (@word, @lang_code, @lang, @edition, @pos, @senses, @sounds, @translations, @forms)
+  INSERT INTO entries (
+    word, normalized_word, lang_code, lang, edition, pos, senses, sounds, translations, forms
+  )
+  VALUES (
+    @word, @normalized_word, @lang_code, @lang, @edition, @pos,
+    @senses, @sounds, @translations, @forms
+  )
 `;
 
 export const ENTRIES_TABLE_DDL = `
   CREATE TABLE IF NOT EXISTS entries (
     id           INTEGER PRIMARY KEY,
     word         TEXT    NOT NULL,
+    normalized_word TEXT NOT NULL,
     lang_code    TEXT    NOT NULL,
     lang         TEXT,
     edition      TEXT    NOT NULL,
@@ -21,9 +27,9 @@ export const ENTRIES_TABLE_DDL = `
 export const ENTRIES_INDEXES_DDL = `
   CREATE INDEX IF NOT EXISTS idx_edition_word ON entries (edition, word);
   CREATE INDEX IF NOT EXISTS idx_search_prefix
-    ON entries (edition, lower(word), word, lang_code, lang, pos);
+    ON entries (edition, normalized_word, word, lang_code, lang, pos);
   CREATE INDEX IF NOT EXISTS idx_search_lang_prefix
-    ON entries (edition, lang_code, lower(word), word, lang, pos);
+    ON entries (edition, lang_code, normalized_word, word, lang, pos);
 `;
 
 export const DROP_MANAGED_INDEXES_DDL = `

@@ -8,7 +8,7 @@ defineRouteMeta({
     tags: ["Search"],
     summary: "Prefix search",
     description:
-      "Returns up to 50 words that start with the given prefix, optionally filtered by language. Case-insensitive matching applies to ASCII letters only; non-ASCII characters are matched exactly.",
+      "Returns up to 50 words that start with the given prefix, optionally filtered by language. Matching uses locale-independent Unicode case folding.",
     parameters: [
       {
         in: "path",
@@ -22,7 +22,7 @@ defineRouteMeta({
         name: "q",
         required: true,
         schema: { type: "string" },
-        description: "Search prefix (ASCII case-insensitive; non-ASCII case-sensitive).",
+        description: "Search prefix (Unicode case-insensitive).",
       },
       {
         in: "query",
@@ -75,14 +75,14 @@ export default defineHandler((event) => {
 
   type Row = { word: string; lang_code: string; lang: string | null; pos: string | null };
 
-  const upperBoundClause = upperBound === null ? "" : "AND lower(word) < ?";
-  const sql = `SELECT DISTINCT lower(word) AS search_word, word, lang_code, lang, pos
+  const upperBoundClause = upperBound === null ? "" : "AND normalized_word < ?";
+  const sql = `SELECT DISTINCT normalized_word, word, lang_code, lang, pos
                FROM entries
                WHERE edition = ?
-                 AND lower(word) >= ?
+                 AND normalized_word >= ?
                  ${upperBoundClause}
                  ${lang ? "AND lang_code = ?" : ""}
-               ORDER BY lower(word), word, lang_code, lang, pos
+               ORDER BY normalized_word, word, lang_code, lang, pos
                LIMIT 50`;
   const parameters = [
     edition,
@@ -90,9 +90,9 @@ export default defineHandler((event) => {
     ...(upperBound === null ? [] : [upperBound]),
     ...(lang ? [lang] : []),
   ];
-  const rows = db.prepare(sql).all(...parameters) as (Row & { search_word: string })[];
+  const rows = db.prepare(sql).all(...parameters) as (Row & { normalized_word: string })[];
 
   return {
-    results: rows.map(({ search_word: _, ...row }) => row),
+    results: rows.map(({ normalized_word: _, ...row }) => row),
   };
 });

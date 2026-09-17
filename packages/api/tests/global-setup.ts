@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import { mkdirSync, rmSync } from "node:fs";
 import { ENTRIES_TABLE_DDL, ENTRIES_INSERT_SQL, METADATA_TABLES_DDL } from "../utils/schema.ts";
 import { finalizeDatabase } from "../utils/finalize-database.ts";
+import { normalizeSearchWord } from "../utils/search.ts";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -85,6 +86,28 @@ const SAMPLE_ENTRIES = [
     forms: null,
   },
   {
+    word: "Straße",
+    lang_code: "de",
+    lang: "German",
+    edition: "en",
+    pos: "noun",
+    senses: JSON.stringify([{ glosses: ["street"], examples: [], tags: [] }]),
+    sounds: null,
+    translations: null,
+    forms: null,
+  },
+  {
+    word: "ΟΣΑ",
+    lang_code: "el",
+    lang: "Greek",
+    edition: "en",
+    pos: "pronoun",
+    senses: JSON.stringify([{ glosses: ["as many as"], examples: [], tags: [] }]),
+    sounds: null,
+    translations: null,
+    forms: null,
+  },
+  {
     word: "%literal",
     lang_code: "en",
     lang: "English",
@@ -117,7 +140,9 @@ export function setup() {
 
   const insert = db.prepare(ENTRIES_INSERT_SQL);
   const insertMany = db.transaction((rows: typeof SAMPLE_ENTRIES) => {
-    for (const row of rows) insert.run(row);
+    for (const row of rows) {
+      insert.run({ ...row, normalized_word: normalizeSearchWord(row.word) });
+    }
   });
 
   insertMany(SAMPLE_ENTRIES);

@@ -19,6 +19,7 @@ const EXPECTED_COLUMNS: Record<
   entries: [
     { name: "id", type: "INTEGER", notnull: 0, pk: 1 },
     { name: "word", type: "TEXT", notnull: 1, pk: 0 },
+    { name: "normalized_word", type: "TEXT", notnull: 1, pk: 0 },
     { name: "lang_code", type: "TEXT", notnull: 1, pk: 0 },
     { name: "lang", type: "TEXT", notnull: 0, pk: 0 },
     { name: "edition", type: "TEXT", notnull: 1, pk: 0 },
@@ -43,9 +44,9 @@ const EXPECTED_COLUMNS: Record<
 const EXPECTED_INDEX_SQL: Record<string, string> = {
   idx_edition_word: "CREATE INDEX idx_edition_word ON entries (edition, word)",
   idx_search_prefix:
-    "CREATE INDEX idx_search_prefix ON entries (edition, lower(word), word, lang_code, lang, pos)",
+    "CREATE INDEX idx_search_prefix ON entries (edition, normalized_word, word, lang_code, lang, pos)",
   idx_search_lang_prefix:
-    "CREATE INDEX idx_search_lang_prefix ON entries (edition, lang_code, lower(word), word, lang, pos)",
+    "CREATE INDEX idx_search_lang_prefix ON entries (edition, lang_code, normalized_word, word, lang, pos)",
 };
 
 function normalizeSql(sql: string): string {

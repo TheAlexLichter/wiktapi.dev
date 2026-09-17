@@ -14,6 +14,7 @@ import { Effect, Console } from "effect";
 import Database from "better-sqlite3";
 import { ENTRIES_TABLE_DDL, ENTRIES_INSERT_SQL, METADATA_TABLES_DDL } from "../utils/schema.ts";
 import { finalizeDatabase } from "../utils/finalize-database.ts";
+import { normalizeSearchWord } from "../utils/search.ts";
 import { ALL_EDITIONS, describeEditionDifference } from "../utils/editions.ts";
 import {
   assertStagingDiskSpace,
@@ -35,6 +36,7 @@ const BATCH_SIZE = 50_000;
 
 interface EntryRow {
   word: string;
+  normalized_word: string;
   lang_code: string;
   lang: string | null;
   edition: string;
@@ -101,6 +103,7 @@ function parseEntry(line: string, edition: string): EntryRow | null {
 
   return {
     word,
+    normalized_word: normalizeSearchWord(word),
     lang_code,
     lang: (parsed.lang as string | null) ?? null,
     edition,
