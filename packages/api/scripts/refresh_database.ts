@@ -16,6 +16,9 @@ import {
 import { ALL_EDITIONS } from "../utils/editions.ts";
 
 const GIBIBYTE = 1024 ** 3;
+// Used only on the first refresh, before either a live database or retained
+// JSONL files exist. Subsequent refreshes use measured on-disk sizes.
+const INITIAL_BUILD_REFERENCE_SIZE = 35 * GIBIBYTE;
 const ENGLISH_DOWNLOAD_MARGIN = 25 * GIBIBYTE;
 const OTHER_DOWNLOAD_MARGIN = 8 * GIBIBYTE;
 const dataDirectory = resolve("data");
@@ -54,6 +57,7 @@ try {
       liveDatabasePath: livePath,
       jsonlPaths: [],
       reclaimablePaths: [previousPath],
+      fallbackReferenceBytes: INITIAL_BUILD_REFERENCE_SIZE,
     });
   }
 

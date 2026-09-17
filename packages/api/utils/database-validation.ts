@@ -42,7 +42,11 @@ export function compareEditionCounts(
   candidate: readonly EditionCount[],
   maximumRegressionFraction: number,
 ): EditionCountComparison[] {
-  if (maximumRegressionFraction < 0 || maximumRegressionFraction >= 1) {
+  if (
+    !Number.isFinite(maximumRegressionFraction) ||
+    maximumRegressionFraction < 0 ||
+    maximumRegressionFraction >= 1
+  ) {
     throw new Error("Maximum count regression must be at least 0 and less than 1");
   }
 
@@ -100,14 +104,27 @@ export function validateDatabaseDeep(
   }
 
   const entries = editionCounts.reduce((sum, { entryCount }) => sum + entryCount, 0);
-  const representedLanguageEntries = db
-    .prepare("SELECT COALESCE(SUM(entry_count), 0) FROM language_stats")
-    .pluck()
-    .get() as number;
-  if (entries === 0 || representedLanguageEntries !== entries) {
-    throw new Error(
-      `Metadata totals are inconsistent: editions=${entries}, languages=${representedLanguageEntries}`,
-    );
+  if (entries === 0) {
+    throw new Error("Database does not contain any entries");
+  }
+
+  const languageCounts = db
+    .prepare(
+      `SELECT lang_code, MAX(lang) AS lang, COUNT(*) AS entry_count
+       FROM entries
+       GROUP BY lang_code
+       ORDER BY lang_code`,
+    )
+    .all();
+  const metadataLanguageCounts = db
+    .prepare(
+      `SELECT lang_code, lang, entry_count
+       FROM language_stats
+       ORDER BY lang_code`,
+    )
+    .all();
+  if (JSON.stringify(languageCounts) !== JSON.stringify(metadataLanguageCounts)) {
+    throw new Error("Per-language metadata does not match entries");
   }
 
   return { entries, editionCounts };

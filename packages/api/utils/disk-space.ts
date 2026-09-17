@@ -33,8 +33,11 @@ export function calculateStagingDiskSpace(options: {
   reusableTargetBytes: number;
   liveDatabaseBytes: number;
   totalJsonlBytes: number;
+  fallbackReferenceBytes?: number;
 }): StagingDiskSpaceSummary {
-  const referenceBytes = Math.max(options.liveDatabaseBytes, options.totalJsonlBytes);
+  const measuredReferenceBytes = Math.max(options.liveDatabaseBytes, options.totalJsonlBytes);
+  const referenceBytes =
+    measuredReferenceBytes > 0 ? measuredReferenceBytes : (options.fallbackReferenceBytes ?? 0);
   if (referenceBytes === 0) {
     throw new Error(
       "Cannot estimate staging disk usage: no live database or JSONL input size found",
@@ -108,6 +111,7 @@ export async function assertStagingDiskSpace(options: {
   liveDatabasePath: string;
   jsonlPaths: readonly string[];
   reclaimablePaths?: readonly string[];
+  fallbackReferenceBytes?: number;
 }): Promise<StagingDiskSpaceSummary> {
   await assertStagingTargetIsIndependent(options.targetPath, options.liveDatabasePath);
   const [filesystem, target, liveDatabase, jsonlFiles, reclaimableFiles] = await Promise.all([
@@ -131,6 +135,7 @@ export async function assertStagingDiskSpace(options: {
     reusableTargetBytes,
     liveDatabaseBytes: liveDatabase?.size ?? 0,
     totalJsonlBytes,
+    fallbackReferenceBytes: options.fallbackReferenceBytes,
   });
 
   if (!summary.hasSufficientSpace) {

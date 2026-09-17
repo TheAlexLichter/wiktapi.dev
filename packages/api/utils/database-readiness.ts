@@ -41,7 +41,7 @@ const EXPECTED_COLUMNS: Record<
     { name: "entry_count", type: "INTEGER", notnull: 1, pk: 0 },
   ],
   language_stats: [
-    { name: "lang_code", type: "TEXT", notnull: 1, pk: 0 },
+    { name: "lang_code", type: "TEXT", notnull: 1, pk: 1 },
     { name: "lang", type: "TEXT", notnull: 0, pk: 0 },
     { name: "entry_count", type: "INTEGER", notnull: 1, pk: 0 },
   ],

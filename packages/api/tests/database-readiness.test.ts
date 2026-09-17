@@ -74,18 +74,25 @@ describe("database readiness", () => {
       candidate.exec(ENTRIES_TABLE_DDL);
       candidate.exec(METADATA_TABLES_DDL);
       initializeSearchNormalizerMetadata(candidate);
-      candidate.prepare(ENTRIES_INSERT_SQL).run({
-        word: "test",
-        normalized_word: "test",
-        lang_code: "en",
-        lang: "English",
-        edition: "en",
-        pos: "noun",
-        senses: "[]",
-        sounds: null,
-        translations: null,
-        forms: null,
-      });
+      const insert = candidate.prepare(ENTRIES_INSERT_SQL);
+      for (const [word, lang_code, lang] of [
+        ["test", "en", "English"],
+        ["test-label", "en", "Modern English"],
+        ["essai", "fr", "French"],
+      ] as const) {
+        insert.run({
+          word,
+          normalized_word: word,
+          lang_code,
+          lang,
+          edition: "en",
+          pos: "noun",
+          senses: "[]",
+          sounds: null,
+          translations: null,
+          forms: null,
+        });
+      }
 
       expect(() => finalizeDatabase(candidate, { expectedEditions: ["en", "fr"] })).toThrow(
         /missing: fr/,
@@ -99,7 +106,30 @@ describe("database readiness", () => {
           expectedEditions: ["en"],
           minimumEditionEntries: 1,
         }).entries,
-      ).toBe(1);
+      ).toBe(3);
+
+      expect(
+        candidate
+          .prepare("SELECT lang_code, lang, entry_count FROM language_stats ORDER BY lang_code")
+          .all(),
+      ).toEqual([
+        { lang_code: "en", lang: "Modern English", entry_count: 2 },
+        { lang_code: "fr", lang: "French", entry_count: 1 },
+      ]);
+
+      candidate.exec(
+        `UPDATE language_stats
+         SET entry_count = CASE lang_code WHEN 'en' THEN 1 WHEN 'fr' THEN 2 END`,
+      );
+      expect(() => validateDatabaseDeep(candidate)).toThrow(/Per-language metadata/);
+      candidate.exec(
+        `UPDATE language_stats
+         SET entry_count = CASE lang_code WHEN 'en' THEN 2 WHEN 'fr' THEN 1 END`,
+      );
+
+      candidate.exec("UPDATE language_stats SET lang = 'Incorrect' WHERE lang_code = 'fr'");
+      expect(() => validateDatabaseDeep(candidate)).toThrow(/Per-language metadata/);
+      candidate.exec("UPDATE language_stats SET lang = 'French' WHERE lang_code = 'fr'");
 
       candidate.exec("UPDATE database_metadata SET value = 'obsolete-normalizer'");
       expect(() => assertDatabaseReady(candidate)).toThrow(/obsolete-normalizer/);
@@ -107,7 +137,7 @@ describe("database readiness", () => {
 
       candidate.exec("UPDATE edition_stats SET entry_count = 2");
       expect(() => validateDatabaseDeep(candidate)).toThrow(/metadata does not match/);
-      candidate.exec("UPDATE edition_stats SET entry_count = 1");
+      candidate.exec("UPDATE edition_stats SET entry_count = 3");
 
       candidate.exec(
         "DROP INDEX idx_search_prefix; CREATE INDEX idx_search_prefix ON entries(word)",

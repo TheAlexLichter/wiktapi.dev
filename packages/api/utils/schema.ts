@@ -56,7 +56,7 @@ export const METADATA_TABLES_DDL = `
   );
 
   CREATE TABLE IF NOT EXISTS language_stats (
-    lang_code   TEXT    NOT NULL,
+    lang_code   TEXT    NOT NULL PRIMARY KEY,
     lang        TEXT,
     entry_count INTEGER NOT NULL
   );
@@ -77,9 +77,9 @@ export const REBUILD_METADATA_SQL = `
 
   DELETE FROM language_stats;
   INSERT INTO language_stats (lang_code, lang, entry_count)
-    SELECT lang_code, lang, COUNT(*)
+    SELECT lang_code, MAX(lang), COUNT(*)
     FROM entries
-    GROUP BY lang_code, lang;
+    GROUP BY lang_code;
 `;
 
-export const DATABASE_SCHEMA_VERSION = 3;
+export const DATABASE_SCHEMA_VERSION = 4;

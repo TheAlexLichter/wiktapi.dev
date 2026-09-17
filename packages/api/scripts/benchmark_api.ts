@@ -6,8 +6,10 @@
 interface Sample {
   label: string;
   milliseconds: number;
-  status: number | "network-error";
+  status: number | "network-error" | "timeout";
 }
+
+class RequestTimeoutError extends Error {}
 
 function argument(name: string, fallback: string): string {
   const index = process.argv.indexOf(`--${name}`);
@@ -30,6 +32,7 @@ const exactWords = corpusArgument("exact-words", argument("exact-word", "test"))
 const requestCount = Number.parseInt(argument("requests", "500"), 10);
 const concurrency = Number.parseInt(argument("concurrency", "10"), 10);
 const warmupCount = Number.parseInt(argument("warmup", "100"), 10);
+const timeoutMilliseconds = Number.parseInt(argument("timeout-ms", "30000"), 10);
 let benchmarkFailed = false;
 
 if (broadPrefixes.length === 0 || rarePrefixes.length === 0 || exactWords.length === 0) {
@@ -44,6 +47,9 @@ if (!Number.isSafeInteger(concurrency) || concurrency < 1) {
 }
 if (!Number.isSafeInteger(warmupCount) || warmupCount < 0) {
   throw new Error("--warmup must be a non-negative integer");
+}
+if (!Number.isSafeInteger(timeoutMilliseconds) || timeoutMilliseconds < 1) {
+  throw new Error("--timeout-ms must be a positive integer");
 }
 
 const endpoints = {
@@ -70,6 +76,22 @@ function percentile(sorted: readonly number[], fraction: number): number {
   return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1)] ?? 0;
 }
 
+async function fetchAndConsume(path: string): Promise<number> {
+  const signal = AbortSignal.timeout(timeoutMilliseconds);
+  try {
+    const response = await fetch(`${baseUrl}${path}`, { signal });
+    await response.arrayBuffer();
+    return response.status;
+  } catch (error) {
+    if (signal.aborted) {
+      throw new RequestTimeoutError(`request timed out after ${timeoutMilliseconds} ms: ${path}`, {
+        cause: error,
+      });
+    }
+    throw error;
+  }
+}
+
 async function runScenario(
   name: string,
   selectRequest: (index: number) => { label: string; path: string },
@@ -86,18 +108,17 @@ async function runScenario(
       const request = selectRequest(index);
       const requestStarted = performance.now();
       try {
-        const response = await fetch(`${baseUrl}${request.path}`);
-        await response.arrayBuffer();
+        const status = await fetchAndConsume(request.path);
         samples.push({
           label: request.label,
           milliseconds: performance.now() - requestStarted,
-          status: response.status,
+          status,
         });
-      } catch {
+      } catch (error) {
         samples.push({
           label: request.label,
           milliseconds: performance.now() - requestStarted,
-          status: "network-error",
+          status: error instanceof RequestTimeoutError ? "timeout" : "network-error",
         });
       }
     }
@@ -111,7 +132,7 @@ async function runScenario(
     const group = samples.filter((sample) => sample.label === label);
     const timings = group.map((sample) => sample.milliseconds).sort((a, b) => a - b);
     const failures = group.filter(
-      (sample) => sample.status === "network-error" || sample.status < 200 || sample.status >= 300,
+      (sample) => typeof sample.status !== "number" || sample.status < 200 || sample.status >= 300,
     ).length;
     const statusCounts = new Map<string, number>();
     for (const sample of group) {
@@ -129,16 +150,22 @@ async function runScenario(
 }
 
 console.log(
-  `Benchmarking ${baseUrl} with ${requestCount} requests/scenario at concurrency ${concurrency}`,
+  `Benchmarking ${baseUrl} with ${requestCount} requests/scenario at concurrency ${concurrency} ` +
+    `and a ${timeoutMilliseconds} ms request timeout`,
 );
 const warmupPaths = Object.values(endpoints).flat();
 if (warmupCount > 0) {
   console.log(`Warming routes with ${warmupCount} requests before measurement`);
   for (let index = 0; index < warmupCount; index++) {
-    const response = await fetch(`${baseUrl}${cycle(warmupPaths, index)}`);
-    await response.arrayBuffer();
-    if (!response.ok) {
-      throw new Error(`Warmup failed with HTTP ${response.status}`);
+    const path = cycle(warmupPaths, index);
+    let status: number;
+    try {
+      status = await fetchAndConsume(path);
+    } catch (error) {
+      throw new Error(`Warmup failed for ${path}: ${String(error)}`, { cause: error });
+    }
+    if (status < 200 || status >= 300) {
+      throw new Error(`Warmup failed for ${path} with HTTP ${status}`);
     }
   }
 }
@@ -159,13 +186,21 @@ await runScenario("exact lookup corpus baseline", (index) => ({
   label: "exact",
   path: cycle(endpoints.exact, index),
 }));
-await runScenario("mixed broad-prefix load (exact latency exposes event-loop impact)", (index) =>
-  index % 5 === 0
-    ? { label: "exact-under-search-load", path: cycle(endpoints.exact, index) }
-    : { label: "broad", path: cycle(endpoints.broad, index) },
-);
+let mixedExactIndex = 0;
+let mixedBroadIndex = 0;
+await runScenario("mixed broad-prefix load (exact latency exposes event-loop impact)", (index) => {
+  if (index % 5 === 0) {
+    return {
+      label: "exact-under-search-load",
+      path: cycle(endpoints.exact, mixedExactIndex++),
+    };
+  }
+  return { label: "broad", path: cycle(endpoints.broad, mixedBroadIndex++) };
+});
 
 if (benchmarkFailed) {
-  console.error("\nBenchmark failed because one or more requests returned a non-2xx status.");
+  console.error(
+    "\nBenchmark failed because one or more requests timed out, failed over the network, or returned a non-2xx status.",
+  );
   process.exitCode = 1;
 }

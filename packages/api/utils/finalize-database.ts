@@ -59,6 +59,10 @@ export function finalizeDatabase(
   db.exec(DROP_MANAGED_INDEXES_DDL);
   db.exec(ENTRIES_INDEXES_DDL);
 
+  // Summary tables are derived and may change shape between schema versions.
+  // Recreate language_stats so re-finalizing a previous generation cannot
+  // retain a schema that is incompatible with the new ready marker.
+  db.exec("DROP TABLE IF EXISTS language_stats");
   db.exec(METADATA_TABLES_DDL);
   db.transaction(() => db.exec(REBUILD_METADATA_SQL))();
   db.exec("ANALYZE");

@@ -40,7 +40,7 @@ server continues reading its open inode; after restart it opens the new file.
 The prior generation remains available for rollback.
 
 The ordering is a compatibility boundary: the old API can read both the old
-schema and the additive schema-v3 database, but the new API deliberately
+schema and the additive schema-v4 database, but the new API deliberately
 refuses an old or unfinished database. Therefore install the finalized database
 first and activate the new API code second. The checkout containing the new
 import, validation, and swap scripts must already be present for step 2;
@@ -49,7 +49,7 @@ Step 3 is the restart that activates the new checkout. Do not restart the API
 while `refresh` is running.
 
 The finalization step builds covering prefix-search indexes and precomputes the
-editions and language statistics used by the metadata endpoints. Schema v3 also
+editions and language statistics used by the metadata endpoints. Schema v4 also
 stores a Unicode case-folded search key for every entry, so an old database must
 be rebuilt from the source dumps with `refresh`. The `index` command refuses to
 upgrade an old database in place because it cannot populate those keys safely.
@@ -63,6 +63,8 @@ API.
 A complete staging import uses the larger of the live database and retained
 JSONL sizes, requires 50% index headroom plus a fixed 5 GiB safety margin, and
 counts an existing staging file as reusable space. `refresh` also checks free
+space against a conservative 35 GiB reference on the very first build, when no
+live database or retained JSONL exists. It checks free
 space before every streamed download/decompression (25 GiB for English and 8
 GiB for each other edition). A uniquely allocated older `.previous` generation
 is counted as reclaimable during preflight and removed only after the preflight
@@ -110,7 +112,7 @@ systemctl restart wiktionary-api
 ```
 
 Rollback retains the rejected live generation as `wiktionary.db.failed`. On the
-first schema-v3 deployment, `.previous` may still be schema v0; in that case,
+first schema-v4 deployment, `.previous` may still be schema v0; in that case,
 roll back the application checkout as well before restarting because the new
 API deliberately rejects v0.
 
@@ -208,12 +210,14 @@ vp run benchmark -- \
   --exact-words test,house,water,run \
   --warmup 500 \
   --requests 5000 \
-  --concurrency 25
+  --concurrency 25 \
+  --timeout-ms 30000
 ```
 
 Choose prefixes and known exact words representative of the loaded dump. Any
-non-2xx response fails the benchmark, so an invalid corpus cannot silently
-produce attractive latency numbers. The warmup phase runs before measurements.
+timeout, network failure, or non-2xx response fails the benchmark, so an invalid
+corpus cannot silently produce attractive latency numbers. The warmup phase
+runs before measurements.
 Record the printed throughput and p50/p95/p99 values; do not infer
 production-scale performance from the small automated query-plan tests. While
 the benchmark runs, also record CPU, memory, event-loop symptoms, and disk I/O

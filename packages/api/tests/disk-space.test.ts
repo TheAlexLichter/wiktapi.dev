@@ -40,6 +40,33 @@ describe("staging disk-space calculation", () => {
     expect(result.hasSufficientSpace).toBe(true);
   });
 
+  it("uses an explicit first-build reference when no database or JSONL exists", () => {
+    const result = calculateStagingDiskSpace({
+      availableBytes: STAGING_FIXED_SAFETY_MARGIN_BYTES + 2_000,
+      reusableTargetBytes: 0,
+      liveDatabaseBytes: 0,
+      totalJsonlBytes: 0,
+      fallbackReferenceBytes: 1_000,
+    });
+
+    expect(result.referenceBytes).toBe(1_000);
+    expect(result.requiredBytes).toBe(STAGING_FIXED_SAFETY_MARGIN_BYTES + 1_500);
+    expect(result.hasSufficientSpace).toBe(true);
+  });
+
+  it("prefers measured sizes over a larger first-build fallback", () => {
+    const result = calculateStagingDiskSpace({
+      availableBytes: STAGING_FIXED_SAFETY_MARGIN_BYTES + 2_000,
+      reusableTargetBytes: 0,
+      liveDatabaseBytes: 1_000,
+      totalJsonlBytes: 500,
+      fallbackReferenceBytes: 10_000,
+    });
+
+    expect(result.referenceBytes).toBe(1_000);
+    expect(result.requiredBytes).toBe(STAGING_FIXED_SAFETY_MARGIN_BYTES + 1_500);
+  });
+
   it("counts reusable staging pages but rejects insufficient total capacity", () => {
     const result = calculateStagingDiskSpace({
       availableBytes: STAGING_FIXED_SAFETY_MARGIN_BYTES + 500,
