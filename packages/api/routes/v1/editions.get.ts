@@ -27,7 +27,7 @@ defineRouteMeta({
 });
 
 export default defineHandler(() => {
-  const rows = db.prepare("SELECT DISTINCT edition FROM entries ORDER BY edition").all() as {
+  const rows = db.prepare("SELECT edition FROM editions ORDER BY edition").all() as {
     edition: string;
   }[];
 

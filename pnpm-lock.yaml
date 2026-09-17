@@ -6,6 +6,9 @@ settings:
 
 catalogs:
   default:
+    unicode-case-folding:
+      specifier: ^1.1.1
+      version: 1.1.1
     vite-plus:
       specifier: latest
       version: 0.0.0-3262bda4.20260210-0221
@@ -33,6 +36,9 @@ importers:
       effect:
         specifier: ^3.19.18
         version: 3.19.18
+      unicode-case-folding:
+        specifier: 'catalog:'
+        version: 1.1.1
     devDependencies:
       '@types/better-sqlite3':
         specifier: ^7.6.13
@@ -1843,6 +1849,9 @@ packages:
   unenv@2.0.0-rc.24:
     resolution: {integrity: sha512-i7qRCmY42zmCwnYlh9H2SvLEypEFGye5iRmEMKjcGi7zk9UquigRjFtTLz0TYqr0ZGLZhaMHl/foy1bZR+Cwlw==}
 
+  unicode-case-folding@1.1.1:
+    resolution: {integrity: sha512-ZAYziAnMTBisO2dT5tyGvBFMNsIfonOS/BZTd3UZaKWtXMOZqK8s8HRUCrlKxGCTeCxCuCjS/6HW+4a6G+rbzw==}
+
   unified@11.0.5:
     resolution: {integrity: sha512-xKvGhPWw3k84Qjh8bI3ZeJjqnyadK+GEFtazSfZv/rKeTkTjOJho6mFqh2SM96iIcZokxiOpg78GazTSg8+KHA==}
 
@@ -3612,6 +3621,8 @@ snapshots:
   unenv@2.0.0-rc.24:
     dependencies:
       pathe: 2.0.3
+
+  unicode-case-folding@1.1.1: {}
 
   unified@11.0.5:
     dependencies:

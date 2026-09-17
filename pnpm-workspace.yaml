@@ -6,6 +6,7 @@ catalogMode: prefer
 catalog:
   "@types/node": ^24
   typescript: ^5
+  unicode-case-folding: ^1.1.1
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vitest: npm:@voidzero-dev/vite-plus-test@latest
   vite-plus: latest

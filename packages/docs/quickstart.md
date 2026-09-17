@@ -43,6 +43,10 @@ Prefix search returns up to 50 matches:
 curl "https://api.wiktapi.dev/v1/en/search?q=katz&lang=de"
 ```
 
+Prefix matching uses locale-independent Unicode case folding. This makes casing
+equivalent across supported scripts and handles full mappings such as
+`Straße`/`STRASSE` and Greek sigma variants.
+
 ## Explore all endpoints
 
 | Endpoint                                       | Description                           |

@@ -17,34 +17,12 @@ import { mkdir, rename, unlink, access } from "node:fs/promises";
 import { resolve } from "node:path";
 import { createGunzip } from "node:zlib";
 import { pipeline } from "node:stream/promises";
-import { Readable } from "node:stream";
+import { Readable, Transform } from "node:stream";
+import { ALL_EDITIONS } from "../utils/editions.ts";
+import { assertFreeDiskSpace, STAGING_FIXED_SAFETY_MARGIN_BYTES } from "../utils/disk-space.ts";
+import { acquireDatabaseMaintenanceLock } from "../utils/database-lock.ts";
 
 const JSONL_DIR = resolve("./data/jsonl");
-
-// All editions available on kaikki.org/dictionary/rawdata.html
-const ALL_EDITIONS = [
-  "en",
-  "zh",
-  "cs",
-  "nl",
-  "fr",
-  "de",
-  "el",
-  "id",
-  "it",
-  "ja",
-  "ko",
-  "ku",
-  "ms",
-  "pl",
-  "pt",
-  "ru",
-  "simple",
-  "es",
-  "th",
-  "tr",
-  "vi",
-];
 
 function kaikkiUrl(edition: string): string {
   if (edition === "en") {
@@ -53,7 +31,7 @@ function kaikkiUrl(edition: string): string {
   return `https://kaikki.org/dictionary/downloads/${edition}/${edition}-extract.jsonl.gz`;
 }
 
-function parseArgs(): { editions: string[]; force: boolean } {
+function parseArgs(): { editions: readonly string[]; force: boolean } {
   const args = process.argv.slice(2);
   if (args.includes("--all")) {
     return { editions: ALL_EDITIONS, force: args.includes("--force") };
@@ -103,6 +81,7 @@ const downloadEdition = (edition: string, force: boolean): Effect.Effect<void, E
 
     const total = Number(response.headers.get("content-length") ?? 0);
     let downloaded = 0;
+    let decompressedSinceDiskCheck = 0;
 
     const progress = new TransformStream<Uint8Array, Uint8Array>({
       transform(chunk, controller) {
@@ -116,11 +95,31 @@ const downloadEdition = (edition: string, force: boolean): Effect.Effect<void, E
       },
     });
 
+    const diskGuard = new Transform({
+      transform(chunk: Buffer, _encoding, callback) {
+        decompressedSinceDiskCheck += chunk.byteLength;
+        if (decompressedSinceDiskCheck < 256 * 1024 ** 2) {
+          callback(null, chunk);
+          return;
+        }
+        decompressedSinceDiskCheck = 0;
+        assertFreeDiskSpace(
+          JSONL_DIR,
+          STAGING_FIXED_SAFETY_MARGIN_BYTES,
+          `${edition} download safety reserve`,
+        ).then(
+          () => callback(null, chunk),
+          (error) => callback(error as Error),
+        );
+      },
+    });
+
     yield* Effect.tryPromise({
       try: () =>
         pipeline(
           Readable.fromWeb(response.body!.pipeThrough(progress) as any),
           createGunzip(),
+          diskGuard,
           createWriteStream(tmp),
         ),
       catch: (e) => new Error(`Download pipeline failed: ${String(e)}`),
@@ -149,7 +148,12 @@ const main: Effect.Effect<void, Error> = Effect.gen(function* () {
   });
 });
 
-Effect.runPromise(main).catch((err) => {
+const maintenanceLock = await acquireDatabaseMaintenanceLock();
+try {
+  await Effect.runPromise(main);
+} catch (err) {
   console.error(err);
-  process.exit(1);
-});
+  process.exitCode = 1;
+} finally {
+  await maintenanceLock.release();
+}

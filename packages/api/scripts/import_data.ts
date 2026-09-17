@@ -7,11 +7,26 @@
  *   vp run @wiktapi/api#import -- --edition en --fresh                          # drops and recreates the table first
  *   vp run @wiktapi/api#import -- --output data/wiktionary.db.new               # write to a staging file
  *   vp run @wiktapi/api#import -- --output data/wiktionary.db.new --skip-indexes # skip index build (run separately)
+ *   vp run @wiktapi/api#import -- --fresh --require-all-editions                 # enforce complete manifest
  */
 
 import { Effect, Console } from "effect";
 import Database from "better-sqlite3";
-import { ENTRIES_TABLE_DDL, ENTRIES_INDEXES_DDL, ENTRIES_INSERT_SQL } from "../utils/schema.ts";
+import { ENTRIES_TABLE_DDL, ENTRIES_INSERT_SQL, METADATA_TABLES_DDL } from "../utils/schema.ts";
+import { finalizeDatabase } from "../utils/finalize-database.ts";
+import {
+  assertSearchNormalizerCompatible,
+  initializeSearchNormalizerMetadata,
+  readSearchNormalizerId,
+} from "../utils/database-metadata.ts";
+import { normalizeSearchWord } from "../utils/search.ts";
+import { ALL_EDITIONS, describeEditionDifference } from "../utils/editions.ts";
+import {
+  assertStagingDiskSpace,
+  assertStagingTargetIsIndependent,
+  formatBytes,
+} from "../utils/disk-space.ts";
+import { acquireDatabaseMaintenanceLock } from "../utils/database-lock.ts";
 import { createReadStream } from "node:fs";
 import { readdir, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -26,6 +41,7 @@ const BATCH_SIZE = 50_000;
 
 interface EntryRow {
   word: string;
+  normalized_word: string;
   lang_code: string;
   lang: string | null;
   edition: string;
@@ -49,9 +65,26 @@ const makeDatabase = (dbPath: string, fresh: boolean) =>
         db.pragma("temp_store = MEMORY");
         db.pragma("mmap_size = 268435456"); // 256 MB
 
-        if (fresh) db.exec("DROP TABLE IF EXISTS entries");
+        if (fresh) {
+          db.exec(`
+            DROP TABLE IF EXISTS entries;
+            DROP TABLE IF EXISTS database_metadata;
+            DROP TABLE IF EXISTS editions;
+            DROP TABLE IF EXISTS edition_stats;
+            DROP TABLE IF EXISTS language_stats;
+          `);
+        }
 
         db.exec(ENTRIES_TABLE_DDL);
+        db.exec(METADATA_TABLES_DDL);
+        if (readSearchNormalizerId(db) === null) {
+          const hasEntries = Boolean(db.prepare("SELECT 1 FROM entries LIMIT 1").get());
+          if (!hasEntries) initializeSearchNormalizerMetadata(db);
+        }
+        assertSearchNormalizerCompatible(db);
+        // Mark the database unavailable until finalization has rebuilt every
+        // request-time index and metadata table successfully.
+        db.pragma("user_version = 0");
 
         return db;
       },
@@ -81,6 +114,7 @@ function parseEntry(line: string, edition: string): EntryRow | null {
 
   return {
     word,
+    normalized_word: normalizeSearchWord(word),
     lang_code,
     lang: (parsed.lang as string | null) ?? null,
     edition,
@@ -166,6 +200,8 @@ function parseArgs(): {
   fresh: boolean;
   dbPath: string;
   skipIndexes: boolean;
+  requireAllEditions: boolean;
+  skipDiskCheck: boolean;
 } {
   const args = process.argv.slice(2);
   const editionIdx = args.indexOf("--edition");
@@ -174,6 +210,8 @@ function parseArgs(): {
     targetEdition: editionIdx !== -1 ? (args[editionIdx + 1] ?? null) : null,
     fresh: args.includes("--fresh"),
     skipIndexes: args.includes("--skip-indexes"),
+    requireAllEditions: args.includes("--require-all-editions"),
+    skipDiskCheck: args.includes("--skip-disk-check"),
     dbPath: outputIdx !== -1 ? resolve(args[outputIdx + 1] ?? DEFAULT_DB_PATH) : DEFAULT_DB_PATH,
   };
 }
@@ -182,11 +220,23 @@ function parseArgs(): {
 
 const main: Effect.Effect<void, Error> = Effect.scoped(
   Effect.gen(function* () {
-    const { targetEdition, fresh, dbPath, skipIndexes } = parseArgs();
+    const { targetEdition, fresh, dbPath, skipIndexes, requireAllEditions, skipDiskCheck } =
+      parseArgs();
+
+    if (requireAllEditions && (!fresh || targetEdition)) {
+      return yield* Effect.fail(
+        new Error("--require-all-editions requires --fresh and cannot be combined with --edition"),
+      );
+    }
+
+    if (fresh) {
+      yield* Effect.tryPromise({
+        try: () => assertStagingTargetIsIndependent(dbPath, DEFAULT_DB_PATH),
+        catch: (error) => new Error(`Unsafe database target: ${String(error)}`),
+      });
+    }
 
     if (fresh) yield* Console.log("--fresh: dropping existing entries table …");
-
-    const db = yield* makeDatabase(dbPath, fresh);
 
     let files: { path: string; edition: string }[];
 
@@ -199,7 +249,8 @@ const main: Effect.Effect<void, Error> = Effect.scoped(
       });
       files = entries
         .filter((f) => f.endsWith(".jsonl"))
-        .map((f) => ({ path: resolve(JSONL_DIR, f), edition: f.replace(/\.jsonl$/, "") }));
+        .map((f) => ({ path: resolve(JSONL_DIR, f), edition: f.replace(/\.jsonl$/, "") }))
+        .sort((a, b) => a.edition.localeCompare(b.edition));
     }
 
     if (files.length === 0) {
@@ -207,6 +258,42 @@ const main: Effect.Effect<void, Error> = Effect.scoped(
         new Error("No JSONL files found. Run `vp run @wiktapi/api#download` first."),
       );
     }
+
+    if (requireAllEditions) {
+      const difference = describeEditionDifference(
+        files.map(({ edition }) => edition),
+        ALL_EDITIONS,
+      );
+      if (difference) {
+        return yield* Effect.fail(
+          new Error(
+            `JSONL edition manifest is incomplete (${difference}). Run download -- --all --force.`,
+          ),
+        );
+      }
+
+      if (skipDiskCheck) {
+        yield* Console.log(
+          "WARNING: skipping the complete-build disk-space guard; peak usage must be monitored manually.",
+        );
+      } else {
+        const disk = yield* Effect.tryPromise({
+          try: () =>
+            assertStagingDiskSpace({
+              targetPath: dbPath,
+              liveDatabasePath: DEFAULT_DB_PATH,
+              jsonlPaths: files.map(({ path }) => path),
+            }),
+          catch: (error) => new Error(`Disk-space preflight failed: ${String(error)}`),
+        });
+        yield* Console.log(
+          `Disk preflight passed — ${formatBytes(disk.availableBytes + disk.reusableTargetBytes)} available or reusable; ` +
+            `${formatBytes(disk.requiredBytes)} required including index headroom.`,
+        );
+      }
+    }
+
+    const db = yield* makeDatabase(dbPath, fresh);
 
     yield* Effect.forEach(
       files,
@@ -223,23 +310,39 @@ const main: Effect.Effect<void, Error> = Effect.scoped(
     );
 
     if (skipIndexes) {
-      yield* Console.log("\nSkipping indexes (run `vp run @wiktapi/api#index` separately).");
+      yield* Console.log(
+        "\nImport complete, but this database is NOT serviceable: indexes and metadata were skipped.",
+      );
+      yield* Console.log(
+        `Finalize it before serving with: vp run @wiktapi/api#index -- --output ${dbPath}${requireAllEditions ? " --require-all-editions" : ""}`,
+      );
     } else {
-      yield* Console.log("\nBuilding indexes …");
-      db.exec(ENTRIES_INDEXES_DDL);
+      yield* Console.log("\nFinalizing indexes and metadata …");
+      finalizeDatabase(db, { expectedEditions: requireAllEditions ? ALL_EDITIONS : undefined });
     }
 
     const { count } = db.prepare("SELECT COUNT(*) AS count FROM entries").get() as {
       count: number;
     };
-    yield* Console.log(`\nDatabase ready at ${dbPath} — ${count.toLocaleString()} total entries`);
-    yield* Console.log(
-      "\nReminder: purge the Cloudflare cache so clients get fresh data (dashboard → Caching → Purge Everything).",
-    );
+    if (skipIndexes) {
+      yield* Console.log(
+        `\nUnfinalized database at ${dbPath} — ${count.toLocaleString()} total entries`,
+      );
+    } else {
+      yield* Console.log(`\nDatabase ready at ${dbPath} — ${count.toLocaleString()} total entries`);
+      yield* Console.log(
+        "\nReminder: purge the Cloudflare cache after the finalized database is deployed.",
+      );
+    }
   }),
 );
 
-Effect.runPromise(main).catch((err) => {
+const maintenanceLock = await acquireDatabaseMaintenanceLock();
+try {
+  await Effect.runPromise(main);
+} catch (err) {
   console.error(err);
-  process.exit(1);
-});
+  process.exitCode = 1;
+} finally {
+  await maintenanceLock.release();
+}
