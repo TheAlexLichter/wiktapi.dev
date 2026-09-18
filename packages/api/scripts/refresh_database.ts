@@ -14,6 +14,7 @@ import {
   assertStagingTargetIsIndependent,
 } from "../utils/disk-space.ts";
 import { ALL_EDITIONS } from "../utils/editions.ts";
+import { runRefreshCompletion } from "../utils/refresh-plan.ts";
 
 const GIBIBYTE = 1024 ** 3;
 // Used only on the first refresh, before either a live database or retained
@@ -98,23 +99,14 @@ try {
     ["--output", stagingPath, "--require-all-editions"],
     lock.token,
   );
-  await runScript(
-    "validate_database.ts",
-    ["--output", stagingPath, "--require-all-editions"],
+  await runRefreshCompletion(
+    { allowCountRegression, noSwap, stagingPath, threshold },
+    runScript,
     lock.token,
   );
 
   if (noSwap) {
     console.log(`Staging refresh complete at ${stagingPath}; --no-swap left it uninstalled`);
-  } else {
-    await runScript(
-      "swap_database.ts",
-      [
-        ...(allowCountRegression ? ["--allow-count-regression"] : []),
-        ...(threshold ? ["--max-count-regression", threshold] : []),
-      ],
-      lock.token,
-    );
   }
 } finally {
   await lock.release();
