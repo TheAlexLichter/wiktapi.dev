@@ -14,7 +14,7 @@ import {
   assertStagingTargetIsIndependent,
 } from "../utils/disk-space.ts";
 import { ALL_EDITIONS } from "../utils/editions.ts";
-import { getRefreshCompletionScript } from "../utils/refresh-plan.ts";
+import { runRefreshCompletion } from "../utils/refresh-plan.ts";
 
 const GIBIBYTE = 1024 ** 3;
 // Used only on the first refresh, before either a live database or retained
@@ -99,13 +99,11 @@ try {
     ["--output", stagingPath, "--require-all-editions"],
     lock.token,
   );
-  const completion = getRefreshCompletionScript({
-    allowCountRegression,
-    noSwap,
-    stagingPath,
-    threshold,
-  });
-  await runScript(completion.script, completion.args, lock.token);
+  await runRefreshCompletion(
+    { allowCountRegression, noSwap, stagingPath, threshold },
+    runScript,
+    lock.token,
+  );
 
   if (noSwap) {
     console.log(`Staging refresh complete at ${stagingPath}; --no-swap left it uninstalled`);

@@ -5,29 +5,28 @@ export interface RefreshCompletionOptions {
   threshold: string | null;
 }
 
-export interface RefreshScriptInvocation {
-  args: string[];
-  script: string;
-}
+export type RefreshScriptRunner = (script: string, args: string[], token: string) => Promise<void>;
 
-export function getRefreshCompletionScript({
-  allowCountRegression,
-  noSwap,
-  stagingPath,
-  threshold,
-}: RefreshCompletionOptions): RefreshScriptInvocation {
+export async function runRefreshCompletion(
+  { allowCountRegression, noSwap, stagingPath, threshold }: RefreshCompletionOptions,
+  runScript: RefreshScriptRunner,
+  token: string,
+): Promise<void> {
   if (noSwap) {
-    return {
-      script: "validate_database.ts",
-      args: ["--output", stagingPath, "--require-all-editions"],
-    };
+    await runScript(
+      "validate_database.ts",
+      ["--output", stagingPath, "--require-all-editions"],
+      token,
+    );
+    return;
   }
 
-  return {
-    script: "swap_database.ts",
-    args: [
+  await runScript(
+    "swap_database.ts",
+    [
       ...(allowCountRegression ? ["--allow-count-regression"] : []),
       ...(threshold ? ["--max-count-regression", threshold] : []),
     ],
-  };
+    token,
+  );
 }
